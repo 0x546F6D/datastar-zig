@@ -3,9 +3,13 @@ const config = @import("config");
 const httpz = @import("httpz");
 const ServerSentEventGenerator = @import("../ServerSentEventGenerator.zig");
 
-pub fn init(res: *httpz.Response) !ServerSentEventGenerator {
+pub fn init(res: *httpz.Response, encoding: ServerSentEventGenerator.Encoding) !ServerSentEventGenerator {
     res.content_type = .EVENTS;
     res.header("Cache-Control", "no-cache");
+    switch (encoding) {
+        .none => {},
+        else => res.header("Content-Encoding", @tagName(encoding)),
+    }
 
     if (config.http1) {
         res.header("Connection", "keep-alive");
@@ -19,5 +23,6 @@ pub fn init(res: *httpz.Response) !ServerSentEventGenerator {
     return .{
         .allocator = res.arena,
         .writer = conn.stream.writer(),
+        .encoding = encoding,
     };
 }

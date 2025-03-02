@@ -10,6 +10,11 @@
             .url = "git+https://github.com/cztomsik/tokamak#857fa78a6fc77c4effa235ef049b8a6461120e5d",
             .hash = "1220ddbe12aa69b3293f0abd7078ff93c309b4f4383e18cbe24b163e4ee4b2befa49",
         },
+        // Add Brotli encoding capabilities
+        .@"zig-brotli" = .{
+            .url = "git+https://github.com/0x546F6D/zig-brotli#bf3158050277628148f8d63f54677fba5c9560cd",
+            .hash = "12202d0830b3ebf2c90069c8f60f5ff7121c05bd70c376ec376f6082ad5909471ce3",
+        },
     },
     .paths = .{
         "build.zig",

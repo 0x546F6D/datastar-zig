@@ -1,11 +1,19 @@
 const std = @import("std");
 const consts = @import("consts.zig");
+const Brotli = @import("brotli");
+const br = Brotli.init(Brotli.Settings{});
 
 const default_execute_script_attributes: []const []const u8 = &[_][]const u8{consts.default_execute_script_attributes};
 
 allocator: std.mem.Allocator,
 writer: std.net.Stream.Writer,
 mutex: std.Thread.Mutex = .{},
+encoding: Encoding = .none,
+
+pub const Encoding = enum {
+    none,
+    br,
+};
 
 pub const ExecuteScriptOptions = struct {
     /// `event_id` can be used by the backend to replay events.
@@ -89,22 +97,42 @@ fn send(
 ) !void {
     self.mutex.lock();
     defer self.mutex.unlock();
+    if (self.encoding == .none) {
+        try self.writer.print("event: {}\n", .{event});
 
-    try self.writer.print("event: {}\n", .{event});
+        if (options.event_id) |id| {
+            try self.writer.print("id: {s}\n", .{id});
+        }
 
-    if (options.event_id) |id| {
-        try self.writer.print("id: {s}\n", .{id});
+        if (options.retry_duration != consts.default_sse_retry_duration) {
+            try self.writer.print("retry: {d}\n", .{options.retry_duration});
+        }
+
+        for (data) |line| {
+            try self.writer.print("data: {s}\n", .{line});
+        }
+
+        try self.writer.writeAll("\n\n");
+    } else {
+        var sse_msg = std.ArrayList([]const u8).init(self.allocator);
+        try sse_msg.append(try std.fmt.allocPrint(self.allocator, "event: {}\n", .{event}));
+
+        if (options.event_id) |id| {
+            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "id: {s}\n", .{id}));
+        }
+
+        if (options.retry_duration != consts.default_sse_retry_duration) {
+            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "retry: {d}\n", .{options.retry_duration}));
+        }
+
+        for (data) |line| {
+            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "data: {s}\n", .{line}));
+        }
+        try sse_msg.append("\n\n");
+
+        const encoded = try br.encode(self.allocator, try std.mem.concat(self.allocator, u8, sse_msg.items));
+        try self.writer.writeAll(encoded);
     }
-
-    if (options.retry_duration != consts.default_sse_retry_duration) {
-        try self.writer.print("retry: {d}\n", .{options.retry_duration});
-    }
-
-    for (data) |line| {
-        try self.writer.print("data: {s}\n", .{line});
-    }
-
-    try self.writer.writeAll("\n\n");
 }
 
 /// `ExecuteScript` executes JavaScript in the browser
