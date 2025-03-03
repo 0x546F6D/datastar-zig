@@ -1,5 +1,6 @@
 .{
-    .name = "datastar",
+    .name = .datastar,
+    .fingerprint = 0xc03ca25beb98a054,
     .version = "1.0.0-beta.1",
     .dependencies = .{
         .httpz = .{

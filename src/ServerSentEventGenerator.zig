@@ -88,50 +88,6 @@ pub const RemoveSignalsOptions = struct {
     retry_duration: u32 = consts.default_sse_retry_duration,
 };
 
-fn prepareMsg(
-    self: *@This(),
-    event: consts.EventType,
-    data: []const []const u8,
-    options: struct {
-        event_id: ?[]const u8 = null,
-        retry_duration: u32 = consts.default_sse_retry_duration,
-    },
-) !void {
-    try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "event: {}\n", .{event}));
-
-    if (options.event_id) |id| {
-        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "id: {s}\n", .{id}));
-    }
-
-    if (options.retry_duration != consts.default_sse_retry_duration) {
-        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "retry: {d}\n", .{options.retry_duration}));
-    }
-
-    for (data) |line| {
-        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "data: {s}\n", .{line}));
-    }
-    try self.sse_msg.append("\n\n");
-}
-
-pub fn sendMsg(
-    self: *@This(),
-) !void {
-    self.mutex.lock();
-    defer self.mutex.unlock();
-    const sse_msg = try std.mem.concat(self.allocator, u8, self.sse_msg.items);
-    switch (self.encoding) {
-        .none => try self.writer.writeAll(sse_msg),
-        .br => {
-            const encoded = try br.encode(self.allocator, sse_msg);
-            try self.writer.writeAll(encoded);
-        },
-        .gzip => {
-            var fbs = std.io.fixedBufferStream(sse_msg);
-            try std.compress.gzip.compress(fbs.reader(), self.writer, .{});
-        },
-    }
-}
-
 fn send(
     self: *@This(),
     event: consts.EventType,
@@ -158,6 +114,51 @@ fn send(
     }
 
     try self.writer.writeAll("\n\n");
+}
+
+fn prepareMsg(
+    self: *@This(),
+    event: consts.EventType,
+    data: []const []const u8,
+    options: struct {
+        event_id: ?[]const u8 = null,
+        retry_duration: u32 = consts.default_sse_retry_duration,
+    },
+) !void {
+    try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "event: {}\n", .{event}));
+
+    if (options.event_id) |id| {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "id: {s}\n", .{id}));
+    }
+
+    if (options.retry_duration != consts.default_sse_retry_duration) {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "retry: {d}\n", .{options.retry_duration}));
+    }
+
+    for (data) |line| {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "data: {s}\n", .{line}));
+    }
+    try self.sse_msg.append("\n\n");
+}
+
+/// Send encoded msg to the browser
+pub fn sendMsg(
+    self: *@This(),
+) !void {
+    self.mutex.lock();
+    defer self.mutex.unlock();
+    const sse_msg = try std.mem.concat(self.allocator, u8, self.sse_msg.items);
+    switch (self.encoding) {
+        .none => try self.writer.writeAll(sse_msg),
+        .br => {
+            const encoded = try br.encode(self.allocator, sse_msg);
+            try self.writer.writeAll(encoded);
+        },
+        .gzip => {
+            var fbs = std.io.fixedBufferStream(sse_msg);
+            try std.compress.gzip.compress(fbs.reader(), self.writer, .{});
+        },
+    }
 }
 
 /// `ExecuteScript` executes JavaScript in the browser
