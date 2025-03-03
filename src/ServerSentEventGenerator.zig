@@ -9,10 +9,12 @@ allocator: std.mem.Allocator,
 writer: std.net.Stream.Writer,
 mutex: std.Thread.Mutex = .{},
 encoding: Encoding = .none,
+sse_msg: std.ArrayList([]const u8) = undefined,
 
 pub const Encoding = enum {
     none,
     br,
+    gzip,
 };
 
 pub const ExecuteScriptOptions = struct {
@@ -86,6 +88,50 @@ pub const RemoveSignalsOptions = struct {
     retry_duration: u32 = consts.default_sse_retry_duration,
 };
 
+fn prepareMsg(
+    self: *@This(),
+    event: consts.EventType,
+    data: []const []const u8,
+    options: struct {
+        event_id: ?[]const u8 = null,
+        retry_duration: u32 = consts.default_sse_retry_duration,
+    },
+) !void {
+    try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "event: {}\n", .{event}));
+
+    if (options.event_id) |id| {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "id: {s}\n", .{id}));
+    }
+
+    if (options.retry_duration != consts.default_sse_retry_duration) {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "retry: {d}\n", .{options.retry_duration}));
+    }
+
+    for (data) |line| {
+        try self.sse_msg.append(try std.fmt.allocPrint(self.allocator, "data: {s}\n", .{line}));
+    }
+    try self.sse_msg.append("\n\n");
+}
+
+pub fn sendMsg(
+    self: *@This(),
+) !void {
+    self.mutex.lock();
+    defer self.mutex.unlock();
+    const sse_msg = try std.mem.concat(self.allocator, u8, self.sse_msg.items);
+    switch (self.encoding) {
+        .none => try self.writer.writeAll(sse_msg),
+        .br => {
+            const encoded = try br.encode(self.allocator, sse_msg);
+            try self.writer.writeAll(encoded);
+        },
+        .gzip => {
+            var fbs = std.io.fixedBufferStream(sse_msg);
+            try std.compress.gzip.compress(fbs.reader(), self.writer, .{});
+        },
+    }
+}
+
 fn send(
     self: *@This(),
     event: consts.EventType,
@@ -97,42 +143,21 @@ fn send(
 ) !void {
     self.mutex.lock();
     defer self.mutex.unlock();
-    if (self.encoding == .none) {
-        try self.writer.print("event: {}\n", .{event});
+    try self.writer.print("event: {}\n", .{event});
 
-        if (options.event_id) |id| {
-            try self.writer.print("id: {s}\n", .{id});
-        }
-
-        if (options.retry_duration != consts.default_sse_retry_duration) {
-            try self.writer.print("retry: {d}\n", .{options.retry_duration});
-        }
-
-        for (data) |line| {
-            try self.writer.print("data: {s}\n", .{line});
-        }
-
-        try self.writer.writeAll("\n\n");
-    } else {
-        var sse_msg = std.ArrayList([]const u8).init(self.allocator);
-        try sse_msg.append(try std.fmt.allocPrint(self.allocator, "event: {}\n", .{event}));
-
-        if (options.event_id) |id| {
-            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "id: {s}\n", .{id}));
-        }
-
-        if (options.retry_duration != consts.default_sse_retry_duration) {
-            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "retry: {d}\n", .{options.retry_duration}));
-        }
-
-        for (data) |line| {
-            try sse_msg.append(try std.fmt.allocPrint(self.allocator, "data: {s}\n", .{line}));
-        }
-        try sse_msg.append("\n\n");
-
-        const encoded = try br.encode(self.allocator, try std.mem.concat(self.allocator, u8, sse_msg.items));
-        try self.writer.writeAll(encoded);
+    if (options.event_id) |id| {
+        try self.writer.print("id: {s}\n", .{id});
     }
+
+    if (options.retry_duration != consts.default_sse_retry_duration) {
+        try self.writer.print("retry: {d}\n", .{options.retry_duration});
+    }
+
+    for (data) |line| {
+        try self.writer.print("data: {s}\n", .{line});
+    }
+
+    try self.writer.writeAll("\n\n");
 }
 
 /// `ExecuteScript` executes JavaScript in the browser
@@ -192,14 +217,25 @@ pub fn executeScript(
         try data.append(line);
     }
 
-    try self.send(
-        .execute_script,
-        try data.toOwnedSlice(),
-        .{
-            .event_id = options.event_id,
-            .retry_duration = options.retry_duration,
-        },
-    );
+    if (self.encoding == .none) {
+        try self.send(
+            .execute_script,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    } else {
+        try self.prepareMsg(
+            .execute_script,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    }
 }
 
 /// `MergeFragments` merges one or more fragments into the DOM. By default,
@@ -280,14 +316,25 @@ pub fn mergeFragments(
         try data.append(line);
     }
 
-    try self.send(
-        .merge_fragments,
-        try data.toOwnedSlice(),
-        .{
-            .event_id = options.event_id,
-            .retry_duration = options.retry_duration,
-        },
-    );
+    if (self.encoding == .none) {
+        try self.send(
+            .merge_fragments,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    } else {
+        try self.prepareMsg(
+            .merge_fragments,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    }
 }
 
 /// `MergeSignals` sends one or more signals to the browser to be merged into the signals.
@@ -324,14 +371,25 @@ pub fn mergeSignals(
 
     try data.append(line);
 
-    try self.send(
-        .merge_signals,
-        try data.toOwnedSlice(),
-        .{
-            .event_id = options.event_id,
-            .retry_duration = options.retry_duration,
-        },
-    );
+    if (self.encoding == .none) {
+        try self.send(
+            .merge_signals,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    } else {
+        try self.prepareMsg(
+            .merge_signals,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    }
 }
 
 /// `RemoveFragments` sends a selector to the browser to remove HTML fragments from the DOM.
@@ -381,14 +439,25 @@ pub fn removeFragments(
 
     try data.append(line);
 
-    try self.send(
-        .remove_fragments,
-        try data.toOwnedSlice(),
-        .{
-            .event_id = options.event_id,
-            .retry_duration = options.retry_duration,
-        },
-    );
+    if (self.encoding == .none) {
+        try self.send(
+            .remove_fragments,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    } else {
+        try self.prepareMsg(
+            .remove_fragments,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    }
 }
 
 /// `RemoveSignals` sends signals to the browser to be removed from the signals.
@@ -414,12 +483,23 @@ pub fn removeSignals(
         try data.append(line);
     }
 
-    try self.send(
-        .remove_signals,
-        try data.toOwnedSlice(),
-        .{
-            .event_id = options.event_id,
-            .retry_duration = options.retry_duration,
-        },
-    );
+    if (self.encoding == .none) {
+        try self.send(
+            .remove_signals,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    } else {
+        try self.prepareMsg(
+            .remove_signals,
+            try data.toOwnedSlice(),
+            .{
+                .event_id = options.event_id,
+                .retry_duration = options.retry_duration,
+            },
+        );
+    }
 }

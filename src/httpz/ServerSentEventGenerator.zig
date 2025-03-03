@@ -24,5 +24,6 @@ pub fn init(res: *httpz.Response, encoding: ServerSentEventGenerator.Encoding) !
         .allocator = res.arena,
         .writer = conn.stream.writer(),
         .encoding = encoding,
+        .sse_msg = std.ArrayList([]const u8).init(res.arena),
     };
 }
