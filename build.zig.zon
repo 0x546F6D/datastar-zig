@@ -1,20 +1,20 @@
 .{
     .name = .datastar,
     .fingerprint = 0xc03ca25beb98a054,
-    .version = "1.0.0-beta.1",
+    .version = "1.0.0-beta.8",
     .dependencies = .{
         .httpz = .{
-            .url = "git+https://github.com/karlseguin/http.zig?ref=master#a691d731047e9a5a79d71ac594cb8f5fad1d0705",
-            .hash = "122072c92285c8c44055eb45058b834d1e7ecd46a5704d58a207103c39fb5922b8f5",
+            .url = "git+https://github.com/karlseguin/http.zig#458281c7d84066d4186bd642c03260ed542e22e5",
+            .hash = "httpz-0.0.0-PNVzrJSuBgCAq2ufQxEcgDV4npCsGEJWH7qMi5PL2669",
         },
         .tokamak = .{
-            .url = "git+https://github.com/cztomsik/tokamak#857fa78a6fc77c4effa235ef049b8a6461120e5d",
-            .hash = "1220ddbe12aa69b3293f0abd7078ff93c309b4f4383e18cbe24b163e4ee4b2befa49",
+            .url = "git+https://github.com/cztomsik/tokamak#88b6875782fa03b9a8408a80e142883968a59788",
+            .hash = "tokamak-2.0.0-AAAAAKG8AQBxwsCtqj-jonqHL9wLLnYttRXj74xbIiUz",
         },
         // Add Brotli encoding capabilities
-        .@"zig-brotli" = .{
-            .url = "git+https://github.com/0x546F6D/zig-brotli#bf3158050277628148f8d63f54677fba5c9560cd",
-            .hash = "12202d0830b3ebf2c90069c8f60f5ff7121c05bd70c376ec376f6082ad5909471ce3",
+        .brotli = .{
+            .url = "git+https://github.com/0x546F6D/zig-brotli#ea0625f498a516159d089513157c762abc2155df",
+            .hash = "brotli-0.0.0-Sq2e40oqAAANfzOA11s-qtGEGE_zjOVDO6-tQC4UIdTk",
         },
     },
     .paths = .{
