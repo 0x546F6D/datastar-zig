@@ -6,13 +6,15 @@ pub fn build(b: *std.Build) void {
     const dep_opts = .{ .target = target, .optimize = optimize };
 
     const httpz = b.dependency("httpz", dep_opts).module("httpz");
-    const tokamak = b.dependency("tokamak", dep_opts).module("tokamak");
+    // const tokamak = b.dependency("tokamak", dep_opts).module("tokamak");
+    const brotli = b.dependency("brotli", dep_opts).module("brotli");
 
     const datastar = b.addModule("datastar", .{
         .root_source_file = b.path("src/root.zig"),
         .imports = &.{
             .{ .name = "httpz", .module = httpz },
-            .{ .name = "tokamak", .module = tokamak },
+            // .{ .name = "tokamak", .module = tokamak },
+            .{ .name = "brotli", .module = brotli },
         },
     });
 
@@ -34,7 +36,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addOptions("config", options);
 
     tests.root_module.addImport("httpz", httpz);
-    tests.root_module.addImport("tokamak", tokamak);
+    // tests.root_module.addImport("tokamak", tokamak);
+    tests.root_module.addImport("brotli", brotli);
 
     const run_test = b.addRunArtifact(tests);
     run_test.has_side_effects = true;

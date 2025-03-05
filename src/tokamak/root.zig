@@ -23,7 +23,7 @@ pub fn readSignals(comptime T: type, req: *tk.Request) !T {
 }
 
 fn sdk(req: *tk.Request, res: *tk.Response) !void {
-    var sse = try ServerSentEventGenerator.init(res);
+    var sse = try ServerSentEventGenerator.init(res, .{});
     const signals = try readSignals(
         testing.Signals,
         req,

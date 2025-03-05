@@ -1,14 +1,20 @@
 .{
-    .name = "datastar",
+    .name = .datastar,
+    .fingerprint = 0xc03ca25beb98a054,
     .version = "1.0.0-beta.3",
     .dependencies = .{
         .httpz = .{
-            .url = "git+https://github.com/karlseguin/http.zig?ref=master#f16b296a2772be97e48a57259c004aa6584a02c6",
-            .hash = "1220e524a72c18aa2585f326902066fda544c5df0cf6618eea885b04041204dc5d7f",
+            .url = "git+https://github.com/karlseguin/http.zig#458281c7d84066d4186bd642c03260ed542e22e5",
+            .hash = "httpz-0.0.0-PNVzrJSuBgCAq2ufQxEcgDV4npCsGEJWH7qMi5PL2669",
         },
         .tokamak = .{
             .url = "git+https://github.com/cztomsik/tokamak#88b6875782fa03b9a8408a80e142883968a59788",
-            .hash = "122071c2c0adaa3fa3a27a872fdc0b2e762db515e3ef8c5b2225332141500e13f110",
+            .hash = "tokamak-2.0.0-AAAAAKG8AQBxwsCtqj-jonqHL9wLLnYttRXj74xbIiUz",
+        },
+        // Add Brotli encoding capabilities
+        .brotli = .{
+            .url = "git+https://github.com/0x546F6D/zig-brotli#ea0625f498a516159d089513157c762abc2155df",
+            .hash = "brotli-0.0.0-Sq2e40oqAAANfzOA11s-qtGEGE_zjOVDO6-tQC4UIdTk",
         },
     },
     .paths = .{
