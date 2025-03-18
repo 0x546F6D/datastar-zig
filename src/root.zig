@@ -176,8 +176,6 @@ pub fn mergeFragments(
             "data: " ++ consts.selector_dataline_literal ++ " {s}\n",
             .{selector},
         );
-    } else {
-        return error{test_err}.test_err;
     }
 
     if (options.merge_mode != consts.default_fragment_merge_mode) {
