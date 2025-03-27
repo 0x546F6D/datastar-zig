@@ -4,8 +4,8 @@
     .version = "1.0.0-beta.9",
     .dependencies = .{
         .httpz = .{
-            .url = "git+https://github.com/karlseguin/http.zig#56258131ef4505543fef5484451867c13c5ff322",
-            .hash = "httpz-0.0.0-PNVzrJSuBgDFvO7mtd2qDzaq8_hXIu1BqFuL1jwAV8Ac",
+            .url = "git+https://github.com/karlseguin/http.zig#91600601f81544c6eeff48e83b76e1e6c5fea00b",
+            .hash = "httpz-0.0.0-PNVzrLa0BgBOHnKWUMiDXXU8iXKdc8qENAWc60QubUq6",
         },
         .brotli = .{
             .url = "git+https://github.com/0x546F6D/zig-brotli#ea0625f498a516159d089513157c762abc2155df",

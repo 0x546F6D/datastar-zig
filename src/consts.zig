@@ -139,6 +139,74 @@ pub const Encoding = enum {
     gzip,
 };
 
+pub const InitOptions = struct {
+    /// Select 'br'/'gzip' encoding. Requires 'sse.sendEncoded()' to send the final encoded msg
+    encoding: ?Encoding = null,
+    /// Minimum size to trigger encoding.
+    enc_min_size: u16 = 256,
+};
+
+pub const ExecuteScriptOptions = struct {
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+    /// A list of 'key value' attributes to add to the script element.
+    attributes: []const []const u8 = &[_][]const u8{default_execute_script_attributes},
+    /// Whether to remove the script after execution.
+    auto_remove: bool = default_execute_script_auto_remove,
+};
+
+pub const MergeFragmentsOptions = struct {
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+    /// The CSS selector to use to insert the fragments.
+    selector: ?[]const u8 = null,
+    /// The mode to use when merging the fragment into the DOM.
+    merge_mode: FragmentMergeMode = default_fragment_merge_mode,
+    /// amount of time used for animations
+    settle_duration: u32 = default_fragments_settle_duration,
+    /// Whether to use view transitions.
+    use_view_transition: bool = default_fragments_use_view_transitions,
+};
+
+pub const MergeSignalsOptions = struct {
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+    /// Whether to merge the signal only if it does not already exist.
+    only_if_missing: bool = default_merge_signals_only_if_missing,
+};
+
+pub const RemoveFragmentsOptions = struct {
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+    /// amount of time used for animations
+    settle_duration: u32 = default_fragments_settle_duration,
+    /// Whether to use view transitions.
+    use_view_transition: bool = default_fragments_use_view_transitions,
+};
+
+pub const RemoveSignalsOptions = struct {
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+};
+
+pub const EventSettings = struct {
+    event: EventType,
+    /// Used by the backend to replay events.
+    event_id: ?[]const u8 = null,
+    /// How long for the browser to wait before reconnecting if the connection is lost.
+    retry_duration: u32 = default_sse_retry_duration,
+};
+
 // #endregion
 
 // #endregion
