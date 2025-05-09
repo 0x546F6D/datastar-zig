@@ -8,8 +8,8 @@
             .hash = "httpz-0.0.0-PNVzrLa0BgBOHnKWUMiDXXU8iXKdc8qENAWc60QubUq6",
         },
         .brotli = .{
-            .url = "git+https://github.com/0x546F6D/zig-brotli#ea0625f498a516159d089513157c762abc2155df",
-            .hash = "brotli-0.0.0-Sq2e40oqAAANfzOA11s-qtGEGE_zjOVDO6-tQC4UIdTk",
+            .url = "git+https://github.com/0x546F6D/zig-brotli#f93c5408304766f579bd82e2e212167ba996241a",
+            .hash = "brotli-0.0.0-Sq2e48VwBwAPF_6PM_TtTF3iWZ4BDUeZqC376T0HLVzd",
         },
     },
     .paths = .{

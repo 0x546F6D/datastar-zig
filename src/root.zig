@@ -1,8 +1,6 @@
 const std = @import("std");
-
 const httpz = @import("httpz");
-const Brotli = @import("brotli");
-const br = Brotli.init(Brotli.Settings{});
+const BrotliEncoder = @import("brotli").Encoder;
 
 const consts = @import("consts.zig");
 const config = @import("config");
@@ -10,32 +8,62 @@ const config = @import("config");
 const DsSdk = @This();
 const log = std.log.scoped(.ds_sdk);
 
-const sse_header = "HTTP/1.1 200 \r\nContent-Type: text/event-stream; charset=UTF-8\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n";
+const sse_header = "HTTP/1.1 200 \r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n";
 
 options: consts.InitOptions,
 arena: std.mem.Allocator,
 stream: std.net.Stream,
 writer: std.io.AnyWriter = undefined,
 data: std.ArrayListUnmanaged(u8) = .empty,
+enc: ?BrotliEncoder = null,
 
-/// Initialise SSE connection
+/// Initialise SSE connection for datastar with brotli
 pub fn init(
-    res: *@import("httpz").Response,
+    res: *httpz.Response,
     options: consts.InitOptions,
 ) !DsSdk {
+    // setup response connection for SSE
     res.conn.handover = .close;
     try res.conn.stream.writeAll(sse_header);
-    if (options.encoding == null) try res.conn.stream.writeAll("\r\n");
+
+    // Initialise brotli encoder if necessary
+    var enc: ?BrotliEncoder = null;
+    if (!options.encoding)
+        try res.conn.stream.writeAll("\r\n")
+    else {
+        if (options.keep_alive) {
+            // set brotli encoder for streaming
+            enc = try BrotliEncoder.init(res.arena, .{ .process = .stream });
+            try res.conn.stream.writeAll("Content-Encoding: br\r\n\r\n");
+        } else
+        // set brotli encoder for oneshot
+        enc = try BrotliEncoder.init(res.arena, .{});
+    }
 
     return DsSdk{
         .options = options,
         .arena = res.arena,
         .stream = res.conn.stream,
+        .enc = enc,
     };
+}
+
+// Deinit Cleanup before closing the SSE connection
+pub fn deinit(self: *DsSdk) !void {
+    if (!self.options.encoding) return;
+    if (!self.options.keep_alive)
+        // compress oneshot and send response
+        try self.sendEncoded()
+    else
+        // Finish Brotli stream
+        try self.stream.writeAll(&BrotliEncoder.streamEnd);
+    // Destroy encoder instance
+    self.enc.?.deinit();
 }
 
 /// Helper function that reads datastar signals from the request.
 pub fn readSignals(comptime T: type, req: *httpz.Request) !T {
+    log.info("readSignals", .{});
     switch (req.method) {
         .GET => {
             const query = try req.query();
@@ -60,6 +88,7 @@ fn initEvent(
         log.err("writer.print(event): {}", .{err});
         return err;
     };
+
     if (settings.event_id) |id| {
         try self.writer.print("id: {s}\n", .{id});
     }
@@ -76,11 +105,15 @@ pub fn mergeFragments(
     fragments: []const u8,
     options: consts.MergeFragmentsOptions,
 ) !void {
-    self.writer = if (self.options.encoding == null)
+    if (fragments.len == 0) return;
+
+    // select writer for direct stream vs brotli
+    self.writer = if (!self.options.encoding)
         self.stream.writer().any()
     else
         self.data.writer(self.arena).any();
 
+    // Initialise SSE Event
     try self.initEvent(
         .{
             .event = .merge_fragments,
@@ -125,7 +158,7 @@ pub fn mergeFragments(
         );
     }
 
-    try self.writer.writeByte('\n');
+    try self.finishResponse();
 }
 
 /// Sends a selector to the browser to remove HTML fragments from the DOM.
@@ -134,11 +167,15 @@ pub fn removeFragments(
     selector: []const u8,
     options: consts.RemoveFragmentsOptions,
 ) !void {
-    self.writer = if (self.options.encoding == null)
+    if (selector.len == 0) return;
+
+    // select writer for direct stream vs brotli
+    self.writer = if (!self.options.encoding)
         self.stream.writer().any()
     else
         self.data.writer(self.arena).any();
 
+    // Initialise SSE Event
     try self.initEvent(
         .{
             .event = .remove_fragments,
@@ -166,7 +203,7 @@ pub fn removeFragments(
         .{selector},
     );
 
-    try self.writer.writeByte('\n');
+    try self.finishResponse();
 }
 
 /// Sends one or more signals to the browser to be merged into the signals.
@@ -175,11 +212,13 @@ pub fn mergeSignals(
     signals: anytype,
     options: consts.MergeSignalsOptions,
 ) !void {
-    self.writer = if (self.options.encoding == null)
+    // select writer for direct stream vs brotli
+    self.writer = if (!self.options.encoding)
         self.stream.writer().any()
     else
         self.data.writer(self.arena).any();
 
+    // Initialise SSE Event
     try self.initEvent(
         .{
             .event = .merge_signals,
@@ -198,7 +237,8 @@ pub fn mergeSignals(
     try self.writer.writeAll("data: " ++ consts.signals_dataline_literal ++ " ");
     try std.json.stringify(signals, .{}, self.writer);
 
-    try self.writer.writeAll("\n\n");
+    try self.writer.writeAll("\n");
+    try self.finishResponse();
 }
 
 /// Sends signals to the browser to be removed from the signals.
@@ -207,11 +247,15 @@ pub fn removeSignals(
     paths: []const []const u8,
     options: consts.RemoveSignalsOptions,
 ) !void {
-    self.writer = if (self.options.encoding == null)
+    if (paths.len == 0) return;
+
+    // select writer for direct stream vs brotli
+    self.writer = if (!self.options.encoding)
         self.stream.writer().any()
     else
         self.data.writer(self.arena).any();
 
+    // Initialise SSE Event
     try self.initEvent(
         .{
             .event = .remove_signals,
@@ -227,7 +271,7 @@ pub fn removeSignals(
         );
     }
 
-    try self.writer.writeByte('\n');
+    try self.finishResponse();
 }
 
 /// Executes JavaScript in the browser
@@ -237,11 +281,15 @@ pub fn executeScript(
     script: []const u8,
     options: consts.ExecuteScriptOptions,
 ) !void {
-    self.writer = if (self.options.encoding == null)
+    if (script.len == 0) return;
+
+    // select writer for direct stream vs brotli
+    self.writer = if (!self.options.encoding)
         self.stream.writer().any()
     else
         self.data.writer(self.arena).any();
 
+    // Initialise SSE Event
     try self.initEvent(
         .{
             .event = .execute_script,
@@ -278,7 +326,7 @@ pub fn executeScript(
         );
     }
 
-    try self.writer.writeByte('\n');
+    try self.finishResponse();
 }
 
 /// Sends an `executeScript` event to redirect the user to a new URL.
@@ -287,6 +335,8 @@ pub fn redirect(
     url: []const u8,
     options: consts.ExecuteScriptOptions,
 ) !void {
+    if (url.len == 0) return;
+
     const script = try std.fmt.allocPrint(
         self.arena,
         "setTimeout(() => window.location.href = '{s}')",
@@ -296,38 +346,44 @@ pub fn redirect(
     try self.executeScript(script, options);
 }
 
-/// Send encoded msg to the browser
-pub fn sendEncoded(
+/// Finish response
+fn finishResponse(
     self: *DsSdk,
 ) !void {
-    const encoding = if (self.options.encoding) |enc| enc else return;
+    try self.writer.writeByte('\n');
+    // Flush brotli encoded response in stream mode
+    if (self.options.encoding and self.options.keep_alive) try self.sendEncoded();
+}
 
-    // Check if response size is big enough to trigger encoding
-    if (self.data.items.len > self.options.enc_min_size) {
-        const writer = self.stream.writer();
-        try writer.print("Content-Encoding: {s}\r\n\r\n", .{@tagName(encoding)});
-
-        switch (encoding) {
-            .br => {
-                const encoded = try br.encode(self.arena, try self.data.toOwnedSlice(self.arena));
-                writer.writeAll(encoded) catch |err| {
-                    log.err("brotli cannot write to stream: {}", .{err});
-                    return err;
-                };
-            },
-            .gzip => {
-                var fbs = std.io.fixedBufferStream(try self.data.toOwnedSlice(self.arena));
-                std.compress.gzip.compress(fbs.reader(), writer, .{}) catch |err| {
-                    log.err("gzip cannot write to stream: {}", .{err});
-                    return err;
-                };
-            },
-        }
-    } else {
-        try self.stream.writeAll("\r\n");
-        try self.stream.writeAll(self.data.items);
+/// Send brotli encoded msg to the browser
+fn sendEncoded(
+    self: *DsSdk,
+) !void {
+    // free data arraylist after sending to stream
+    defer {
+        self.data.deinit(self.arena);
+        self.data = .empty;
     }
-    self.data.deinit(self.arena);
+
+    if (!self.options.keep_alive)
+        // Check if response size is big enough to trigger encoding
+        if (self.data.items.len >= self.options.enc_min_size) {
+            // add brotli encoding to response
+            try self.stream.writeAll("Content-Encoding: br\r\n\r\n");
+        } else {
+            // send raw data instead
+            try self.stream.writeAll("\r\n");
+            try self.stream.writeAll(self.data.items);
+            return;
+        };
+
+    const to_send = try self.data.toOwnedSlice(self.arena);
+    defer self.arena.free(to_send);
+
+    const encoded = try self.enc.?.encode(to_send);
+    defer self.arena.free(encoded);
+
+    try self.stream.writeAll(encoded);
 }
 
 test {

@@ -141,9 +141,11 @@ pub const Encoding = enum {
 
 pub const InitOptions = struct {
     /// Select 'br'/'gzip' encoding. Requires 'sse.sendEncoded()' to send the final encoded msg
-    encoding: ?Encoding = null,
+    encoding: bool = false,
     /// Minimum size to trigger encoding.
     enc_min_size: u16 = 256,
+    /// Keep alive for long-lasting connection
+    keep_alive: bool = false,
 };
 
 pub const ExecuteScriptOptions = struct {
